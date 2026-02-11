@@ -64,7 +64,14 @@ class Level1Activity : ComponentActivity() {
                             },
                             explanation = "The Main thread is responsible for drawing the UI. If you block it (e.g. Thread.sleep), no frames can be drawn, and the app appears frozen (ANR).\n\n" +
                                     "Coroutines allow us to switch dispatchers easily. Dispatchers.IO is designed for offloading blocking I/O operations (like network or disk calls), while Dispatchers.Default is for CPU-intensive tasks.\n\n" +
-                                    "Properly scoping your work ensures a responsive UI.",
+                                    "KEY PITFALL — delay() vs Thread.sleep():\n" +
+                                    "Thread.sleep() blocks the underlying thread for ALL coroutines running on it. " +
+                                    "delay() only suspends the current coroutine — other coroutines on the same thread keep running. " +
+                                    "Inside a coroutine, always prefer delay() over Thread.sleep().\n\n" +
+                                    "KEY PITFALL — suspend does NOT mean \"runs on a background thread\":\n" +
+                                    "A suspend function runs on whatever dispatcher the caller is using. " +
+                                    "If you call a suspend function from Dispatchers.Main, it runs on Main unless it internally calls withContext. " +
+                                    "Convention: suspend functions should be main-safe — they should handle their own dispatcher switching with withContext if they do blocking work.",
                             statusText = statusText
                         )
                     }

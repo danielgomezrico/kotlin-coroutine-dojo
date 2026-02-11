@@ -73,9 +73,15 @@ class Level2Activity : ComponentActivity() {
                                     }
                                 },
                                 explanation =
-                                        "Coroutines must be scoped. \n\n" +
-                                                "GlobalScope is rarely needed. It has no bounds.\n\n" +
-                                                "lifecycleScope (available in Activity/Fragment) ensures that when the UI is destroyed, the background work is cancelled, freeing up resources and preventing crashes.",
+                                        "Coroutines must be scoped. GlobalScope is rarely needed — it has no bounds.\n\n" +
+                                                "CHOOSING THE RIGHT SCOPE:\n" +
+                                                "• viewModelScope — survives configuration changes (rotation). Use for data loading and business logic.\n" +
+                                                "• lifecycleScope — tied to Activity/Fragment destroy. Use for UI operations that should stop when the screen goes away.\n" +
+                                                "• rememberCoroutineScope — tied to Compose composition. Use for interaction-driven side-effects (e.g. button click triggers animation).\n\n" +
+                                                "Rule of thumb: pick the scope whose lifetime matches the work. Data fetching belongs in viewModelScope. UI animations belong in lifecycleScope or rememberCoroutineScope.\n\n" +
+                                                "COMING IN LEVEL 4 — repeatOnLifecycle:\n" +
+                                                "lifecycleScope.launch { flow.collect {} } keeps collecting even when the app is backgrounded. " +
+                                                "repeatOnLifecycle cancels and restarts collection based on lifecycle state, saving battery and memory. We'll cover this in the Flow level.",
                                 statusText = statusText
                         )
                     }

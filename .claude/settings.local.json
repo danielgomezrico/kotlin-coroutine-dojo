@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.lukaslechner.com)",
+      "WebFetch(domain:blog.shreyaspatil.dev)",
+      "WebFetch(domain:www.droidcon.com)",
+      "WebFetch(domain:elizarov.medium.com)",
+      "WebFetch(domain:kt.academy)",
+      "Bash(./gradlew:*)"
+    ]
+  }
+}
