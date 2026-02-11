@@ -1,0 +1,1 @@
+Show case concepts of coroutines with bad and good patterns
