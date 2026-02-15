@@ -8,81 +8,108 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import com.dan.coroutinedojo.ui.components.LessonScreen
 import com.dan.coroutinedojo.ui.theme.CoroutineDojoTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class Level4Activity : ComponentActivity() {
-
-    private val tickFlow = MutableStateFlow(0)
-
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             CoroutineDojoTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Level 4: Exception Handling") },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                    }
+                ) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
                         var statusText by remember { mutableStateOf("Ready") }
-                        val lifecycleAwareValue by tickFlow.collectAsStateWithLifecycle()
+
+                        // Scope with CoroutineExceptionHandler for the antipattern demo
+                        val handler = CoroutineExceptionHandler { _, throwable ->
+                            statusText = "Antipattern: CoroutineExceptionHandler caught:\n" +
+                                "\"${throwable.message}\"\n\n" +
+                                "The try/catch around launch() did NOT catch this.\n" +
+                                "The exception propagated to the scope's handler instead."
+                            Log.e("Level4", "Uncaught in coroutine", throwable)
+                        }
+                        val antipatternScope = remember {
+                            CoroutineScope(SupervisorJob() + handler)
+                        }
+                        val scope = rememberCoroutineScope()
 
                         LessonScreen(
-                            title = "Level 4: StateFlow & SharedFlow",
-                            objective = "Collect Flows with lifecycle awareness to avoid wasting resources when the app is backgrounded.",
-                            antipatternTitle = "Non-Lifecycle-Aware Collection",
-                            antipatternDescription = "lifecycleScope.launch { flow.collect {} } keeps collecting even when the app is in the background, wasting CPU and battery.",
+                            objective = "Handle exceptions correctly in coroutines without crashing or silently losing errors.",
+                            antipatternTitle = "try/catch Around launch() Doesn't Work",
+                            antipatternDescription = "Wrapping launch {} in try/catch does nothing — launch starts " +
+                                "asynchronously, so the exception propagates to the scope, not the caller.",
                             onAntipatternClick = {
-                                statusText = "Antipattern: Starting counter...\n" +
-                                    "Collection continues in background!\n" +
-                                    "Check Logcat tag 'Level4' — ticks keep logging even when backgrounded."
-                                lifecycleScope.launch {
-                                    var tick = 0
-                                    while (true) {
-                                        tick++
-                                        Log.d("Level4", "Antipattern collecting tick: $tick")
-                                        statusText = "Antipattern tick: $tick\n(collecting even in background)"
-                                        delay(1000)
+                                statusText = "Antipattern: Trying to catch exception outside launch..."
+                                try {
+                                    antipatternScope.launch {
+                                        throw RuntimeException("Simulated network error")
                                     }
+                                    // This line runs immediately — launch is fire-and-forget.
+                                    // The try/catch will NOT catch the coroutine's exception.
+                                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                                    // This never executes for the coroutine's exception
+                                    statusText = "This never shows — try/catch can't catch launch exceptions"
                                 }
                             },
-                            bestPracticeTitle = "collectAsStateWithLifecycle",
-                            bestPracticeDescription = "collectAsStateWithLifecycle() stops collection when the lifecycle drops below STARTED and restarts when it resumes.",
+                            bestPracticeTitle = "Handle Inside the Coroutine Body",
+                            bestPracticeDescription = "Put try/catch inside the launch block to handle exceptions " +
+                                "at the coroutine boundary.",
                             onBestPracticeClick = {
-                                statusText = "Best Practice: Starting counter...\n" +
-                                    "Collection pauses when backgrounded, resumes in foreground.\n" +
-                                    "Watch the counter — it pauses when you leave the app."
-                                lifecycleScope.launch {
-                                    var tick = 0
-                                    while (true) {
-                                        tick++
-                                        tickFlow.value = tick
-                                        delay(1000)
+                                statusText = "Best Practice: Handling exception inside launch..."
+                                scope.launch {
+                                    try {
+                                        // Simulate failing work
+                                        throw RuntimeException("Simulated network error")
+                                    } catch (e: RuntimeException) {
+                                        statusText = "Best Practice: Caught inside launch:\n" +
+                                            "\"${e.message}\"\n\n" +
+                                            "Exception handled cleanly — no crash, no silent loss."
                                     }
                                 }
                             },
-                            explanation = "The value from collectAsStateWithLifecycle: $lifecycleAwareValue\n\n" +
-                                "collectAsStateWithLifecycle (from lifecycle-runtime-compose) automatically handles lifecycle. " +
-                                "It collects when the lifecycle is at least STARTED and cancels when it drops below.\n\n" +
-                                "KEY PITFALL — StateFlow equality-based conflation:\n" +
-                                "StateFlow compares new values with equals(). If you emit the same data class instance twice, " +
-                                "the second emission is silently dropped. Collectors never see it. " +
-                                "Workaround: add a unique ID field, or use SharedFlow(replay=1) instead.\n\n" +
-                                "KEY PITFALL — SharedFlow(replay=0) loses events:\n" +
-                                "Events emitted before a subscriber starts collecting are lost forever. " +
-                                "For one-shot events (navigation, snackbar), a Channel is a better fit since it buffers.\n\n" +
-                                "PITFALL — Hot becomes cold after operators:\n" +
-                                ".map{} on a StateFlow returns a cold Flow — each collector runs its own operator chain independently. " +
-                                "To re-share the result, use stateIn() or shareIn() with a scope.",
+                            explanation = "LAUNCH propagates exceptions to the parent scope. " +
+                                "If unhandled, this crashes the app.\n\n" +
+                                "ASYNC defers exceptions until await() is called. " +
+                                "If you never await, the error is silently lost — a common trap.\n\n" +
+                                "CoroutineExceptionHandler is a LAST RESORT — install it on a scope " +
+                                "to catch otherwise-unhandled exceptions. " +
+                                "It's not a replacement for proper try/catch.\n\n" +
+                                "supervisorScope isolates children so one failure doesn't cancel siblings. " +
+                                "Without it, one child's exception cancels all siblings in a coroutineScope.\n\n" +
+                                "RULE: Always handle exceptions at the coroutine boundary " +
+                                "(inside the launch/async block), not around the builder call.",
                             statusText = statusText
                         )
                     }

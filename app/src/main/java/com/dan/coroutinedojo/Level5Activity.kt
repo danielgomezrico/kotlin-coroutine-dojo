@@ -7,7 +7,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,95 +23,95 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.dan.coroutinedojo.ui.components.LessonScreen
 import com.dan.coroutinedojo.ui.theme.CoroutineDojoTheme
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 class Level5Activity : ComponentActivity() {
-    @OptIn(ExperimentalCoroutinesApi::class)
+
+    private suspend fun fetchProfile(): String {
+        delay(2000)
+        return "User Profile"
+    }
+
+    private suspend fun fetchSettings(): String {
+        delay(2000)
+        return "User Settings"
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             CoroutineDojoTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Level 5: Parallel Decomposition") },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                    }
+                ) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
                         val scope = rememberCoroutineScope()
                         var statusText by remember { mutableStateOf("Ready") }
 
                         LessonScreen(
-                            title = "Level 5: Channels & Backpressure",
-                            objective = "Understand Channel lifecycle — always close channels to avoid hanging consumers.",
-                            antipatternTitle = "Unclosed Channel (Consumer Hangs)",
-                            antipatternDescription = "Producer sends items into a Channel but never calls close(). " +
-                                "The consumer's for-loop waits forever for more items.",
+                            objective = "Run independent operations concurrently instead of sequentially to improve performance.",
+                            antipatternTitle = "Sequential Suspend Calls",
+                            antipatternDescription = "Calling two independent suspend functions one after another " +
+                                "doubles the total wait time.",
                             onAntipatternClick = {
-                                statusText = "Starting unclosed channel demo...\n"
+                                statusText = "Sequential: Fetching..."
                                 scope.launch {
-                                    val channel = Channel<Int>()
-                                    launch {
-                                        for (i in 1..3) {
-                                            channel.send(i)
-                                            statusText += "Sent: $i\n"
-                                            delay(300)
-                                        }
-                                        statusText += "Producer done (but forgot to close!)\n"
-                                        // Bug: no channel.close()
-                                    }
-                                    launch {
-                                        val result = withTimeoutOrNull(3000) {
-                                            for (item in channel) {
-                                                statusText += "Received: $item\n"
-                                            }
-                                            "Consumer finished"
-                                        }
-                                        if (result == null) {
-                                            statusText += "Consumer TIMED OUT — hanging forever waiting for more items!\n" +
-                                                "(In real code there's no timeout — it hangs indefinitely)"
-                                        }
-                                    }
+                                    val start = System.currentTimeMillis()
+                                    val profile = fetchProfile()   // ~2s
+                                    val settings = fetchSettings() // ~2s
+                                    val elapsed = System.currentTimeMillis() - start
+                                    statusText = "Sequential completed in ${elapsed}ms\n" +
+                                        "Profile: $profile\n" +
+                                        "Settings: $settings\n\n" +
+                                        "~4 seconds — each call waited for the previous one."
                                 }
                             },
-                            bestPracticeTitle = "produce{} Builder (Auto-Close)",
-                            bestPracticeDescription = "The produce{} coroutine builder auto-closes the channel when the block completes. " +
-                                "Consumer terminates cleanly.",
+                            bestPracticeTitle = "Concurrent with async/await",
+                            bestPracticeDescription = "Wrapping independent calls in async {} runs them " +
+                                "concurrently within a coroutineScope.",
                             onBestPracticeClick = {
-                                statusText = "Starting produce{} demo...\n"
+                                statusText = "Concurrent: Fetching..."
                                 scope.launch {
-                                    val channel = produce(capacity = Channel.BUFFERED) {
-                                        for (i in 1..3) {
-                                            send(i)
-                                            statusText += "Sent: $i\n"
-                                            delay(300)
-                                        }
-                                        statusText += "Producer done (channel auto-closes)\n"
+                                    val start = System.currentTimeMillis()
+                                    val (profile, settings) = coroutineScope {
+                                        val profileDeferred = async { fetchProfile() }
+                                        val settingsDeferred = async { fetchSettings() }
+                                        Pair(profileDeferred.await(), settingsDeferred.await())
                                     }
-                                    for (item in channel) {
-                                        statusText += "Received: $item\n"
-                                    }
-                                    statusText += "Consumer finished cleanly!"
+                                    val elapsed = System.currentTimeMillis() - start
+                                    statusText = "Concurrent completed in ${elapsed}ms\n" +
+                                        "Profile: $profile\n" +
+                                        "Settings: $settings\n\n" +
+                                        "~2 seconds — both calls ran in parallel."
                                 }
                             },
-                            explanation = "Channels are hot stream primitives for coroutine-to-coroutine communication. " +
-                                "Unlike Flow, they have a buffer and support multiple producers/consumers.\n\n" +
-                                "KEY PITFALL — Forgetting to close:\n" +
-                                "A for-loop on a channel suspends forever waiting for more items unless the channel is closed. " +
-                                "The produce{} builder solves this by auto-closing on completion or cancellation.\n\n" +
-                                "KEY PITFALL — send() vs trySend():\n" +
-                                "send() is a suspend function — it suspends when the buffer is full. " +
-                                "You can't call it from non-suspending contexts like click handlers. " +
-                                "trySend() returns immediately with success/failure. " +
-                                "Combine trySend() with Channel.CONFLATED or Channel.DROP_OLDEST for UI events.\n\n" +
-                                "PITFALL — Rendezvous deadlocks:\n" +
-                                "Two coroutines each doing send-then-receive on opposite rendezvous channels deadlock — " +
-                                "both block on send with nobody receiving. Fix: add a buffer.\n\n" +
-                                "CHANNEL vs FLOW — when to choose:\n" +
-                                "Prefer Flow for most stream use cases — it's simpler and supports operators. " +
-                                "Use Channel only for fan-out (multiple consumers), fan-in (multiple producers), " +
-                                "or true producer-consumer queues between independent coroutines.",
+                            explanation = "async {} returns a Deferred<T> and starts the coroutine " +
+                                "immediately within its scope.\n\n" +
+                                "coroutineScope {} ensures structured concurrency — if one async " +
+                                "fails, the other is cancelled automatically. " +
+                                "This prevents orphaned work.\n\n" +
+                                "awaitAll() is a shorthand for waiting on multiple deferreds:\n" +
+                                "val (a, b) = awaitAll(deferred1, deferred2)\n\n" +
+                                "WHEN NOT TO PARALLELIZE:\n" +
+                                "If call B needs the result of call A, they must be sequential. " +
+                                "async is only for independent operations.\n\n" +
+                                "MEASURE with measureTimeMillis {} or System.currentTimeMillis() " +
+                                "to verify the speedup.",
                             statusText = statusText
                         )
                     }

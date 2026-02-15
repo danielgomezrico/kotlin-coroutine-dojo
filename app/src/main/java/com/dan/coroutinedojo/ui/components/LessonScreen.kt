@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun LessonScreen(
-    title: String,
     objective: String,
     antipatternTitle: String = "Antipattern",
     antipatternDescription: String,
@@ -41,8 +40,6 @@ fun LessonScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(text = title, style = MaterialTheme.typography.headlineMedium)
-
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
